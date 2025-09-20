@@ -1,0 +1,148 @@
+And we also need:
+1) Centralized transaction middleware:
+   So services/controllers can easily run inside transactions.
+
+2) Centralized transaction error handling:
+   So if anything fails, rollback happens cleanly, and errors bubble up to your global error handler
+
+
+
+**** check 3. below, maybe that is the best solution ****
+
+
+-----------------------------------------------------------------
+
+
+1. Centralized Transaction Middleware
+
+You’d normally do this in your service layer (since services are where business logic runs across multiple models). 
+But you can also wrap it like middleware for controllers.
+
+
+📄 src/middlewares/transaction.middleware.js
+-----------------------------------------------------------------
+const sequelize = require("../config/database");
+
+// Middleware to wrap each request in a transaction (if needed)
+async function transactionMiddleware(req, res, next) {
+  const t = await sequelize.transaction();
+  req.transaction = t; // attach transaction to request
+  try {
+    await next(); // move to controller/service
+    await t.commit();
+  } catch (err) {
+    await t.rollback();
+    next(err); // pass to error handler
+  }
+}
+
+module.exports = transactionMiddleware;
+-----------------------------------------------------------------
+
+
+
+Example Usage in Routes
+-----------------------------------------------------------------
+const express = require("express");
+const router = express.Router();
+const transactionMiddleware = require("../middlewares/transaction.middleware");
+const userController = require("../controllers/auth.controller");
+
+router.post("/register", transactionMiddleware, userController.register);
+
+module.exports = router;
+-----------------------------------------------------------------
+
+
+Inside your userController.register, you can pass req.transaction down into the service:
+-----------------------------------------------------------------
+async function register(req, res, next) {
+  try {
+    const user = await authService.registerUser(req.body, req.transaction);
+    res.status(201).json(user);
+  } catch (err) {
+    next(err);
+  }
+}
+-----------------------------------------------------------------
+
+
+
+
+
+
+2. Centralized Transaction Error Handling
+
+You already have a global error handler middleware (error.middleware.js).
+The transaction middleware above already rolls back and then calls next(err) — meaning it hands off to your error handler.
+
+
+📄 src/middlewares/error.middleware.js
+-----------------------------------------------------------------
+function errorMiddleware(err, req, res, next) {
+  console.error("❌ Error:", err);
+
+  // Sequelize validation errors
+  if (err.name === "SequelizeValidationError") {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: err.errors.map(e => e.message),
+    });
+  }
+
+  // Default fallback
+  res.status(500).json({
+    error: "Internal Server Error",
+    message: err.message,
+  });
+}
+
+module.exports = errorMiddleware;
+-----------------------------------------------------------------
+
+
+
+
+
+3. Alternative: Scoped Transaction Wrapper (More Flexible)
+
+Instead of per-request transactions (which may be overkill), you can create a transaction helper in utils/transaction.js:
+
+📄 src/utils/transaction.js
+-----------------------------------------------------------------
+const sequelize = require("../config/database");
+
+async function withTransaction(work) {
+  const t = await sequelize.transaction();
+  try {
+    const result = await work(t); // run business logic
+    await t.commit();
+    return result;
+  } catch (err) {
+    await t.rollback();
+    throw err;
+  }
+}
+
+module.exports = withTransaction;
+-----------------------------------------------------------------
+
+
+Then in your service:
+-----------------------------------------------------------------
+const withTransaction = require("../utils/transaction");
+const User = require("../models/user.model");
+
+async function registerUser({ username, email, password }) {
+  return await withTransaction(async (t) => {
+    const passwordHash = await bcrypt.hash(password, 10);
+    return await User.create(
+      { username, email, passwordHash },
+      { transaction: t }
+    );
+  });
+}
+-----------------------------------------------------------------
+
+
+

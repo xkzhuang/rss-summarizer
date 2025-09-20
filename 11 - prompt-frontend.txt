@@ -1,0 +1,66 @@
+I want to build a professional Vue 3 frontend for a multi-user RSS feed summarization platform with the following requirements:
+
+1. **Architecture & Structure**:
+   - Use **Vue 3 with Composition API**.
+   - Use **Vue Router** for routing and navigation.
+   - Use **Pinia** for state management.
+   - Organize project as follows:
+     - src/components/ → reusable UI components
+     - src/views/ → page-level views (Login, Dashboard, etc.)
+     - src/router/ → routes configuration
+     - src/stores/ → Pinia stores for auth, feeds, summaries
+     - src/services/ → API calls to backend
+     - src/utils/ → helper functions
+   - Follow a modular, maintainable structure.
+
+2. **Pages / Views**:
+   - **Login/Register Page**: form for username/email/password, validation, submit to backend.
+   - **Anonymous Dashboard**: shows recent summaries from public feeds.
+   - **Logged-in Dashboard**: shows personalized summaries from subscribed feeds, allows subscribing/unsubscribing feeds.
+   - **Feed Search Page**: search summaries by keyword, filter by feed, date, or category.
+
+3. **Components**:
+   - SummaryCard: displays summarized content, article title, source, date.
+   - FeedList: list of feeds user is subscribed to.
+   - Navbar: shows login/register links or user menu.
+   - Loader/Spinner: for async API calls.
+
+4. **State Management**:
+   - Auth store: user info, JWT token, login/logout actions.
+   - Feed store: list of feeds, user subscriptions, fetch feeds from API.
+   - Summary store: list of summaries, fetch summaries from API, search/filter.
+
+5. **Services / API Layer**:
+   - authService.js → login, register, token refresh.
+   - feedService.js → get feeds, subscribe/unsubscribe.
+   - summaryService.js → get summaries, search summaries.
+   - All API calls use **Axios**, include JWT token if logged-in.
+
+6. **Routing**:
+   - `/login` → login page
+   - `/register` → register page
+   - `/dashboard` → logged-in dashboard
+   - `/anonymous` → anonymous dashboard
+   - `/search` → summary search page
+   - Route guards: logged-in routes require JWT, redirect to login if not authenticated.
+
+7. **Styling**:
+   - Use **TailwindCSS** for styling.
+   - Responsive design for mobile and desktop.
+
+8. **Error Handling & UX**:
+   - Show error messages for failed API calls or validation errors.
+   - Use loaders/spinners during async operations.
+   - Show empty states if no feeds or summaries exist.
+
+9. **Bonus / Professional Practices**:
+   - Use TypeScript if possible for type safety.
+   - Use composables (`useAuth`, `useFeed`, `useSummary`) for reusable logic.
+   - Keep components small and reusable.
+   - Pagination or infinite scroll for summaries.
+   - Proper folder/module separation for maintainability.
+
+10. **Deliverables**:
+    - Full Vue 3 scaffold with components, views, stores, router, services.
+    - Example implementation of Login/Register page, Anonymous Dashboard, and SummaryCard component.
+    - Sample integration with backend API (Node.js + Express).

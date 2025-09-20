@@ -1,0 +1,103 @@
+In your Node.js + Express project, your feed.service.js (responsible for fetching feeds, 
+summarizing with GPT, storing into MariaDB) should not depend on an HTTP request to run. Instead, 
+it needs to auto-run asynchronously in the background.
+
+There are several professional patterns to achieve this:
+
+1. Cron Jobs (Most Common)
+
+📄 src/jobs/feed.job.js
+--------------------------------------------------------------------
+const cron = require("node-cron");
+const feedService = require("../services/feed.service");
+
+// Run every 15 minutes
+cron.schedule("*/15 * * * *", async () => {
+  console.log("⏳ Running feed polling job...");
+  try {
+    await feedService.fetchAndProcessFeeds();
+    console.log("✅ Feeds processed successfully");
+  } catch (err) {
+    console.error("❌ Feed job failed:", err);
+  }
+});
+--------------------------------------------------------------------
+
+This is loaded in your app startup (loaders/index.js) so it always runs in the background.
+
+
+
+
+2. Service-Layer Async Worker
+
+Inside feed.service.js, you expose both manual trigger and auto trigger.
+
+📄 src/services/feed.service.js
+--------------------------------------------------------------------
+const Parser = require("rss-parser");
+const parser = new Parser();
+const Article = require("../models/article.model");
+const Summary = require("../models/summary.model");
+const gptClient = require("../utils/gptClient");
+
+async function fetchAndProcessFeeds() {
+  // imagine feeds are stored in DB
+  const feeds = await Feed.findAll();
+  for (const feed of feeds) {
+    try {
+      const rss = await parser.parseURL(feed.url);
+
+      for (const item of rss.items) {
+        const exists = await Article.findOne({ where: { link: item.link } });
+        if (exists) continue;
+
+        const article = await Article.create({
+          feedId: feed.id,
+          title: item.title,
+          link: item.link,
+          pubDate: item.pubDate,
+          rawContent: item.contentSnippet,
+        });
+
+        const summaryText = await gptClient.summarize(item.contentSnippet);
+
+        await Summary.create({
+          articleId: article.id,
+          summaryText,
+          aiModel: "gpt-4",
+        });
+      }
+    } catch (err) {
+      console.error(`Error processing feed ${feed.url}:`, err);
+    }
+  }
+}
+
+module.exports = { fetchAndProcessFeeds };
+--------------------------------------------------------------------
+
+This function is reusable:
+  Called by cron job automatically.
+  Could also be exposed via /api/feeds/refresh endpoint if you want manual refresh.
+
+
+
+
+
+
+
+**********************************************************************
+
+3. Hybrid Approach
+    - For small/medium apps → Cron + feed.service.js is simplest.
+    - For enterprise scale → Job Queue + Worker is better.
+
+
+    - Most production Express apps don’t block HTTP with background tasks. They either:
+      - Use cron jobs (internal for small apps).
+      - Use job queues (Redis, RabbitMQ, Kafka) for scalable async tasks.
+
+**********************************************************************
+
+
+

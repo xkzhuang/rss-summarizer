@@ -1,0 +1,66 @@
+I want to build a professional-level Node.js + Express.js project for a multi-user RSS/Atom feed summarization platform using OpenAI GPT models. 
+
+Here are my requirements:
+
+1. **Architecture & Structure**:
+   - Use a **modular architecture** with folders: controllers/, services/, models/, middlewares/, jobs/, utils/.
+   - Use Sequelize ORM for MariaDB.
+   - Use async background services for fetching and summarizing feeds.
+   - Controllers call services, services call models. Services should support transactions when needed.
+   - Include proper error handling and logging middleware.
+
+2. **Models**:
+   - Users: id, username, email, passwordHash, role, timestamps.
+   - Feeds: id, url, title, description, lastFetched, timestamps.
+   - Subscriptions: id, userId, feedId, timestamps.
+   - Articles: id, feedId, title, link, pubDate, rawContent, timestamps.
+   - Summaries: id, articleId, summaryText, aiModel, timestamps.
+   - Models should be **class-based using Sequelize.Model**, with instance methods and class methods.
+   - Avoid duplication by possibly using a BaseModel class.
+
+3. **Middleware**:
+   - Auth middleware for JWT-based user authentication.
+   - Transaction middleware to wrap selected routes in Sequelize transactions.
+   - Error-handling middleware for centralized exception handling.
+
+4. **Background Services / Jobs**:
+   - A feed polling job that runs asynchronously (e.g., using node-cron) and fetches feeds, checks for new articles, calls GPT API for summarization, and stores summaries in DB.
+   - Service should support using either a system GPT API key or per-user OpenAI keys securely stored and encrypted.
+
+5. **Services**:
+   - FeedService: fetch feeds, parse RSS/Atom, create articles, summarize using GPT.
+   - AuthService: register/login users, hash passwords.
+   - SummaryService: handle GPT calls and store summaries.
+   - Services should support async/await, proper error handling, and transactions where appropriate.
+
+6. **Controllers**:
+   - AuthController: register/login endpoints.
+   - FeedController: endpoints to view feeds and summaries (anonymous vs logged-in users), manage subscriptions.
+   - Controllers should only call services, not query DB directly.
+
+7. **Backend API**:
+   - Expose REST API endpoints for login/register, fetch summaries, manage subscriptions.
+   - Support anonymous and logged-in dashboards.
+
+8. **Frontend**:
+   - Use Vue.js for frontend.
+   - Pages:
+     - Login/Register
+     - Anonymous Dashboard (recent summaries)
+     - Logged-in Dashboard (personalized subscriptions)
+     - Feed search
+   - Fetch data from backend API.
+
+9. **Security & Best Practices**:
+   - Encrypt per-user OpenAI keys if used.
+   - Use JWT for authentication.
+   - Handle async errors properly.
+   - Use transactions for multi-step DB operations.
+   - Apply indexes where appropriate.
+
+10. **Deliverables**:
+    - Full project scaffold with folders and key files (models, controllers, services, middleware, jobs, utils).
+    - Example implementation for User model, FeedService (including async background job), and AuthController.
+    - Proper import/export using ES6 modules or CommonJS.
+    - Sample cron job setup for feed polling.
+    - Example usage of GPT API in summary service.

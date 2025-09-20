@@ -1,0 +1,244 @@
+Rough Development Plan
+
+Phase 1 – Core Infra
+ Setup MariaDB schema.
+ Build backend (Node.js) with user auth, feed CRUD, and summaries API.
+ Implement feed polling job (cron + node-fetch).
+
+Phase 2 – Summarization Pipeline
+ Integrate GPT API to summarize fetched feeds.
+ Store summaries in summaries table.
+ Enrich with metadata (datetime, tags).
+
+Phase 3 – Frontend (Vue)
+ Anonymous dashboard (general summaries).
+ Login/register.
+ Logged-in dashboard (personalized).
+
+Phase 4 – Enhancements
+ Search (full-text in MariaDB).
+ Feed categories/tags.
+
+Optional: Notifications, digests, “trending topics” analysis.
+
+
+=============================================================================
+Project scaffold using Node.js+Express.js:
+
+project-root/
+│── src/
+│   ├── config/              # Configuration (env vars, db, logging)
+│   │   ├── database.js
+│   │   ├── logger.js
+│   │   └── index.js
+│   │
+│   ├── loaders/             # Startup loaders (db connection, express init)
+│   │   ├── express.js
+│   │   ├── mariadb.js
+│   │   └── index.js
+│   │
+│   ├── models/              # Sequelize/TypeORM models (User, Feed, Article…)
+│   │   ├── user.model.js
+│   │   ├── feed.model.js
+│   │   ├── article.model.js
+│   │   └── summary.model.js
+│   │
+│   ├── controllers/         # Route handlers (thin controllers)
+│   │   ├── auth.controller.js
+│   │   ├── feed.controller.js
+│   │   ├── article.controller.js
+│   │   └── summary.controller.js
+│   │
+│   ├── services/            # Business logic (talks to models, APIs, GPT)
+│   │   ├── auth.service.js
+│   │   ├── feed.service.js
+│   │   ├── article.service.js
+│   │   └── summary.service.js
+│   │
+│   ├── routes/              # API endpoints mapping
+│   │   ├── auth.routes.js
+│   │   ├── feed.routes.js
+│   │   ├── article.routes.js
+│   │   ├── summary.routes.js
+│   │   └── index.js
+│   │
+│   ├── jobs/                # Cron jobs (feed polling, cleanup, etc.)
+│   │   └── feed.job.js
+│   │
+│   ├── utils/               # Helpers (formatting, validation, etc.)
+│   │   ├── errorHandler.js
+│   │   ├── jwt.js
+│   │   └── gptClient.js
+│   │
+│   ├── middlewares/         # Auth, validation, rate limiting
+│   │   ├── auth.middleware.js
+│   │   ├── error.middleware.js
+│   │   └── validate.middleware.js
+│   │
+│   ├── app.js               # Express app setup
+│   └── server.js            # App entry point
+│
+├── test/                    # Unit/integration tests
+│   ├── auth.test.js
+│   ├── feed.test.js
+│   └── summary.test.js
+│
+├── .env                     # Environment variables
+├── .gitignore
+├── package.json
+└── README.md
+
+
+
+Example Entry Points:
+
+server.js
+---------------------------------------------------------------------------
+const express = require("express");
+const loaders = require("./src/loaders");
+
+async function startServer() {
+  const app = express();
+
+  await loaders(app);
+
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => console.log(`🚀 Server running on port ${port}`));
+}
+
+startServer();
+---------------------------------------------------------------------------
+
+
+src/loaders/index.js
+---------------------------------------------------------------------------
+const expressLoader = require("./express");
+const mariadbLoader = require("./mariadb");
+
+module.exports = async (app) => {
+  await mariadbLoader();      // DB connection
+  expressLoader(app);         // Express middlewares/routes
+};
+---------------------------------------------------------------------------
+
+
+src/loaders/express.js
+---------------------------------------------------------------------------
+const express = require("express");
+const routes = require("../routes");
+const errorMiddleware = require("../middlewares/error.middleware");
+
+module.exports = (app) => {
+  app.use(express.json());
+  app.use("/api", routes);
+  app.use(errorMiddleware);
+};
+---------------------------------------------------------------------------
+
+
+
+src/models/user.model.js
+---------------------------------------------------------------------------
+const { DataTypes } = require("sequelize");
+const sequelize = require("../config/database"); // DB connection instance
+
+const User = sequelize.define("User", {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  username: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    unique: true,
+    validate: {
+      notEmpty: true,
+      len: [3, 50],
+    },
+  },
+  email: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    unique: true,
+    validate: {
+      isEmail: true,
+    },
+  },
+  passwordHash: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+  },
+  role: {
+    type: DataTypes.ENUM("user", "admin"),
+    allowNull: false,
+    defaultValue: "user",
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+}, {
+  tableName: "users",
+  timestamps: true, // adds createdAt & updatedAt automatically
+  indexes: [
+    { unique: true, fields: ["username"] },
+    { unique: true, fields: ["email"] },
+  ],
+});
+
+module.exports = User;
+---------------------------------------------------------------------------
+
+
+
+src/config/database.js
+---------------------------------------------------------------------------
+const { Sequelize } = require("sequelize");
+
+const sequelize = new Sequelize(
+  process.env.DB_NAME, 
+  process.env.DB_USER, 
+  process.env.DB_PASSWORD, 
+  {
+    host: process.env.DB_HOST || "localhost",
+    dialect: "mariadb",
+    logging: false, // set to console.log for debugging
+  }
+);
+
+module.exports = sequelize;
+---------------------------------------------------------------------------
+
+
+
+Example inside auth.service.js:
+---------------------------------------------------------------------------
+const bcrypt = require("bcrypt");
+const User = require("../models/user.model");
+
+async function registerUser({ username, email, password }) {
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  return await User.create({
+    username,
+    email,
+    passwordHash,
+  });
+}
+
+async function validateUser(email, password) {
+  const user = await User.findOne({ where: { email } });
+  if (!user) return null;
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+  return isMatch ? user : null;
+}
+
+module.exports = { registerUser, validateUser };
+---------------------------------------------------------------------------
+
